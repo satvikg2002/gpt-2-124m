@@ -197,14 +197,14 @@ enc = tiktoken.get_encoding('gpt2')
 
 with open('input.txt', 'r') as f:
     text = f.read()
-    print("Words -", len(text.split()))
 text = text[:1000] # first 1,000 characters (approx 300 tokens)
 tokens = enc.encode(text)
 B, T = 4, 32   
 
-buf = torch.tensor(tokens[:B*T + 1]);
-x = buf[:-1].view(B, T);    x = x.to(device) 
-y = buf[1:].view(B, T);     y = y.to(device)    
+buf = torch.tensor(tokens[:B*T + 1])
+buf = buf.to(device)
+x = buf[:-1].view(B, T)
+y = buf[1:].view(B, T)  
 
 
 # model = GPT.from_pretrained('gpt2')
@@ -212,8 +212,15 @@ model = GPT(GPTConfig())    # get logits from random model
 model.eval()
 model.to(device)
 
-logits, loss = model(x, y)
-print(loss)
+# optimize params
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)      # uses buffers (first and second moment)
+for i in range(50):
+    optimizer.zero_grad()
+    logits, loss = model(x, y)
+    loss.backward()     # accumulate gradients
+    optimizer.step()    # update params
+    print(f"step {i}, loss: {loss.item()}")
+
 import sys; sys.exit(0)
 
 import tiktoken
