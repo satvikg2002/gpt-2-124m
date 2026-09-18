@@ -103,7 +103,7 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)  #classifier
 
 
-    def forward(self, idx):
+    def forward(self, idx, targets=None):
         # idx is of shape (B, T)
         B, T = idx.size()
         assert T <= self.config.block_size, f"Cannot forward sequence of length {T}, block size is only {self.config.block_size}"
@@ -122,7 +122,11 @@ class GPT(nn.Module):
         x = self.transformer.ln_f(x)
 
         logits = self.lm_head(x) # (B, T, vocab_size)
-        return logits
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))  # flatten out into B*T, vocab_size for input
+
+        return logits, loss
 
 
     @classmethod
@@ -179,12 +183,38 @@ class GPT(nn.Module):
 
 num_return_sequences = 5
 max_length = 30
+if torch.cuda.is_available():
+    device = "cuda"
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
+print(f"using device: {device}")
+
+
+import tiktoken
+enc = tiktoken.get_encoding('gpt2')
+
+with open('input.txt', 'r') as f:
+    text = f.read()
+    print("Words -", len(text.split()))
+text = text[:1000] # first 1,000 characters (approx 300 tokens)
+tokens = enc.encode(text)
+B, T = 4, 32   
+
+buf = torch.tensor(tokens[:B*T + 1]);
+x = buf[:-1].view(B, T);    x = x.to(device) 
+y = buf[1:].view(B, T);     y = y.to(device)    
 
 
 # model = GPT.from_pretrained('gpt2')
-model = GPT(GPTConfig())    # random model
+model = GPT(GPTConfig())    # get logits from random model
 model.eval()
-model.to('cuda')
+model.to(device)
+
+logits, loss = model(x, y)
+print(loss)
+import sys; sys.exit(0)
 
 import tiktoken
 enc = tiktoken.get_encoding('gpt2')
@@ -192,7 +222,7 @@ tokens = enc.encode("Hello, I'm a language model,")
 
 tokens = torch.tensor(tokens, dtype=torch.long)     # 8 tokens for given string
 tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)    # (5, 8)
-x = tokens.to('cuda')
+x = tokens.to(device)
 
 # generate for x -> (B, T) 
 # set the seed to 42
