@@ -257,8 +257,14 @@ train_loader = DataLoaderLite(B=4, T=1024)
 torch.set_float32_matmul_precision('high')
 
 model = GPT(GPTConfig())    # get logits from random model
-model.eval()
+# model = GPT.from_pretrained("gpt2") # or init from OpenAI GPT-2
 model.to(device)
+
+# runs the code in compiler mode, with access to all blocks, saves intermediaries being saved to GRAM
+# performs inline operations in 1 go instead of multiple R/W (needs high amt of SMs (memory bottleneck))
+use_compile = False # torch.compile interferes with Generation
+if use_compile:
+    model = torch.compile(model)
 
 # optimize params
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)      # uses buffers (first and second moment)

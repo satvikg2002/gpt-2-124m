@@ -782,6 +782,7 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
+    { name = "triton-windows" },
 ]
 
 [package.metadata]
@@ -795,6 +796,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.9.0", index = "https://download.pytorch.org/whl/cu130" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "transformers", specifier = ">=4.57.1" },
+    { name = "triton-windows", specifier = ">=3.8.0.post28" },
 ]
 
 [[package]]
@@ -2815,6 +2817,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/93/d9/08c75f3459f19ad00425b564058e40efa4bcd79b816064cf27499303ea42/triton-3.8.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:387dae4cb0089a7b6ba1a428ae0782b65c4c58f57d94617cb22ca8593d8ccbca", size = 247972313, upload-time = "2026-08-28T15:56:14.007Z" },
     { url = "https://files.pythonhosted.org/packages/7c/34/429c5592181cfb7361a0a8e0bff218e7224b726709d75da2472b3e819f70/triton-3.8.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1b84e7d512490ba529111260fa6f7cad8b254a6bb5fbdf41d5ef9a5e57f52d0a", size = 226591133, upload-time = "2026-08-28T16:09:02.271Z" },
     { url = "https://files.pythonhosted.org/packages/fe/d1/aa8a3e935c37efee7945984fdb64d7e0851bf6d920afd97b2d21f9d23360/triton-3.8.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:74217bb56ed8692759227758e4c4b3bd2d608a209c1a7a081bf361fb4c2c1bf9", size = 248077577, upload-time = "2026-08-28T15:56:24.94Z" },
+]
+
+[[package]]
+name = "triton-windows"
+version = "3.8.0.post28"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ce/9b/51431c92ada3ce601ad303544702f8e0f6b556fff0c5578ace256a194718/triton_windows-3.8.0.post28-cp314-cp314-win_amd64.whl", hash = "sha256:087a7d3d98d481cb2eceb0fc9cbfb363ed96189abd188cd7c043efafd40549bc", size = 54097254, upload-time = "2026-08-29T12:14:35.839Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/77/d9cf9e05c320fc781affe0656caa81ec2c79c706997ef734a4266f5e0f37/triton_windows-3.8.0.post28-cp314-cp314-win_arm64.whl", hash = "sha256:e766cc72355fbd391bd5869f8f4f2c416557a0af0853a25f616736037ac415f2", size = 49565672, upload-time = "2026-08-29T12:14:44.492Z" },
 ]
 
 [[package]]
