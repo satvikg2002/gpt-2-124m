@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import math
 
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 class CausalSelfAttention(nn.Module):
     """Defining Head and Multi Head Attention together in the same module for efficient PyTorch calculation"""
@@ -191,23 +192,41 @@ else:
     device = "cpu"
 print(f"using device: {device}")
 
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 import tiktoken
-enc = tiktoken.get_encoding('gpt2')
 
-with open('input.txt', 'r') as f:
-    text = f.read()
-text = text[:1000] # first 1,000 characters (approx 300 tokens)
-tokens = enc.encode(text)
-B, T = 4, 32   
+class DataLoaderLite:
+    def __init__(self, B, T):
+        self.B = B
+        self.T = T
 
-buf = torch.tensor(tokens[:B*T + 1])
-buf = buf.to(device)
-x = buf[:-1].view(B, T)
-y = buf[1:].view(B, T)  
+        # at init load tokens from disk and store them in memory
+        with open('input.txt', 'r') as f:
+            text = f.read()
+        enc = tiktoken.get_encoding('gpt2')
+        tokens = enc.encode(text)
+        self.tokens = torch.tensor(tokens)
+        print(f"loaded {len(self.tokens)} tokens")
+        print(f"1 epoch = {len(self.tokens) // (B * T)} batches")
 
+        # state
+        self.current_position = 0
 
-# model = GPT.from_pretrained('gpt2')
+    def next_batch(self):
+        B, T = self.B, self.T
+        buf = self.tokens[self.current_position : self.current_position+B*T+1]
+        x = (buf[:-1]).view(B, T) # inputs
+        y = (buf[1:]).view(B, T) # targets
+        # advance the position in the tensor
+        self.current_position += B * T
+        # if loading the next batch would be out of bounds, reset
+        if self.current_position + (B * T + 1) > len(self.tokens):
+            self.current_position = 0
+        return x, y
+
+train_loader = DataLoaderLite(4, 32)
+
 model = GPT(GPTConfig())    # get logits from random model
 model.eval()
 model.to(device)
@@ -216,6 +235,8 @@ model.to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)      # uses buffers (first and second moment)
 for i in range(50):
     optimizer.zero_grad()
+    x, y = train_loader.next_batch()
+    x, y = x.to(device), y.to(device)
     logits, loss = model(x, y)
     loss.backward()     # accumulate gradients
     optimizer.step()    # update params
