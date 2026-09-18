@@ -20,6 +20,8 @@ class CausalSelfAttention(nn.Module):
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
 
+        self.GPT_SCALE_INIT = 1     # std dev scaling flag
+
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -58,6 +60,7 @@ class MLP(nn.Module):
         self.c_fc = nn.Linear(config.n_embd, 4*config.n_embd)
         self.gelu = nn.GELU(approximate='tanh')     # use approx since it was used in GPT 2, could just run non approx on torch
         self.c_proj = nn.Linear(4*config.n_embd, config.n_embd)
+        self.GPT_SCALE_INIT = 1
     
     def forward(self, x):
         x = self.c_fc(x)
@@ -105,6 +108,21 @@ class GPT(nn.Module):
 
         # weight sharing scheme (bottom and top of transformer map exactly the same way)
         self.transformer.wte.weight = self.lm_head.weight
+
+        # initialize params
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            std = 0.02      # near Javier Initialization (GPT 2 Source Code consistent)
+            if hasattr(module, 'GPT_SCALE_INIT'):
+                std *= (2 * self.config.n_layer) ** -0.5    # scale down std-dev
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)   #pytorch default is uniform function
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
 
     def forward(self, idx, targets=None):
@@ -228,6 +246,11 @@ class DataLoaderLite:
             self.current_position = 0
         return x, y
 
+
+torch.manual_seed(1337)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(1337)
+ 
 train_loader = DataLoaderLite(4, 32)
 
 model = GPT(GPTConfig())    # get logits from random model
