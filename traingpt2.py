@@ -203,6 +203,8 @@ class GPT(nn.Module):
         return model
 
 
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 num_return_sequences = 5
 max_length = 30
 if torch.cuda.is_available():
@@ -213,8 +215,7 @@ else:
     device = "cpu"
 print(f"using device: {device}")
 
-# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+import time
 import tiktoken
 
 class DataLoaderLite:
@@ -251,7 +252,9 @@ torch.manual_seed(1337)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(1337)
  
-train_loader = DataLoaderLite(4, 32)
+train_loader = DataLoaderLite(B=4, T=1024)
+
+torch.set_float32_matmul_precision('high')
 
 model = GPT(GPTConfig())    # get logits from random model
 model.eval()
@@ -260,13 +263,19 @@ model.to(device)
 # optimize params
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)      # uses buffers (first and second moment)
 for i in range(50):
+    t0 = time.time()
     optimizer.zero_grad()
     x, y = train_loader.next_batch()
     x, y = x.to(device), y.to(device)
     logits, loss = model(x, y)
     loss.backward()     # accumulate gradients
     optimizer.step()    # update params
-    print(f"step {i}, loss: {loss.item()}")
+
+    torch.cuda.synchronize()
+    t1 = time.time()
+    dt = (t1-t0)*1000   # time diff in ms
+    tokensps = (train_loader.B * train_loader.T)/(t1-t0)
+    print(f"step {i}, loss: {loss.item()}, dt: {dt:.2f}ms, token/sec: {tokensps}")
 
 import sys; sys.exit(0)
 
