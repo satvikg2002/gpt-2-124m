@@ -267,7 +267,9 @@ for i in range(50):
     optimizer.zero_grad()
     x, y = train_loader.next_batch()
     x, y = x.to(device), y.to(device)
-    logits, loss = model(x, y)
+
+    with torch.autocast(device_type=device, dtype=torch.bfloat16):      # use 16 bit float only for foward pass and loss calculation
+        logits, loss = model(x, y)
     loss.backward()     # accumulate gradients
     optimizer.step()    # update params
 
