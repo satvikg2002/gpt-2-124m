@@ -260,7 +260,7 @@ train_loader = DataLoaderLite(B=4, T=1024)
 
 torch.set_float32_matmul_precision('high')
 
-model = GPT(GPTConfig())    # get logits from random model
+model = GPT(GPTConfig(vocab_size=50304))    # get logits from random model (use a "nice"r number div by 128)
 # model = GPT.from_pretrained("gpt2") # or init from OpenAI GPT-2
 model.to(device)
 
@@ -271,7 +271,7 @@ if use_compile:
     model = torch.compile(model)
 
 # optimize params
-optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)      # uses buffers (first and second moment)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)      # uses buffers (first and second moment)
 for i in range(50):
     t0 = time.time()
     optimizer.zero_grad()
@@ -280,14 +280,16 @@ for i in range(50):
 
     with torch.autocast(device_type=device, dtype=torch.bfloat16):      # use 16 bit float only for foward pass and loss calculation
         logits, loss = model(x, y)
+
     loss.backward()     # accumulate gradients
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)      # sqrt(p1^2 + p2^2 + ...) of all params <= 1
     optimizer.step()    # update params
 
     torch.cuda.synchronize()
     t1 = time.time()
     dt = (t1-t0)*1000   # time diff in ms
     tokensps = (train_loader.B * train_loader.T)/(t1-t0)
-    print(f"step {i}, loss: {loss.item()}, dt: {dt:.2f}ms, token/sec: {tokensps}")
+    print(f"step {i} | loss: {loss.item()} | dt: {dt:.2f}ms | norm: {norm:.4f} | token/sec: {tokensps}")
 
 import sys; sys.exit(0)
 
