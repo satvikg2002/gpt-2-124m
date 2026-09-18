@@ -270,9 +270,26 @@ use_compile = False # torch.compile interferes with Generation
 if use_compile:
     model = torch.compile(model)
 
+max_lr = 6e-4
+min_lr = max_lr * 0.1
+warmup_steps = 10
+max_steps = 50 
+def get_lr(it):
+    # 1) linear warmup for warmup_iters steps
+    if it < warmup_steps:
+        return max_lr * (it+1) / warmup_steps
+    # 2) if it > lr_decay_iters, return min learning rate
+    if it > max_steps:
+        return min_lr
+    # 3) in between, use cosine decay down to min learning rate
+    decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)
+    assert 0 <= decay_ratio <= 1
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff starts at 1 and goes to 0
+    return min_lr + coeff * (max_lr - min_lr)
+
 # optimize params
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)      # uses buffers (first and second moment)
-for i in range(50):
+for step in range(max_steps):
     t0 = time.time()
     optimizer.zero_grad()
     x, y = train_loader.next_batch()
@@ -283,13 +300,19 @@ for i in range(50):
 
     loss.backward()     # accumulate gradients
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)      # sqrt(p1^2 + p2^2 + ...) of all params <= 1
+
+    # determine and set LR for the current iteration
+    lr = get_lr(step)
+    for param_group in optimizer.param_groups:      # set LR for all param groups in PyTorch
+        param_group['lr'] = lr
+
     optimizer.step()    # update params
 
     torch.cuda.synchronize()
     t1 = time.time()
     dt = (t1-t0)*1000   # time diff in ms
     tokensps = (train_loader.B * train_loader.T)/(t1-t0)
-    print(f"step {i} | loss: {loss.item()} | dt: {dt:.2f}ms | norm: {norm:.4f} | token/sec: {tokensps}")
+    print(f"step {step} | loss: {loss.item()} | dt: {dt:.2f}ms | lr: {lr:.2e} | norm: {norm:.4f} | token/sec: {tokensps}")
 
 import sys; sys.exit(0)
 
