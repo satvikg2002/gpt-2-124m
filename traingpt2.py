@@ -320,7 +320,7 @@ if torch.cuda.is_available():
 total_batch_size = 524288 # 2**19, ~0.5M, in number of tokens
 B = 4       # micro batch size
 T = 1024    # sequence length
-assert total_batch_size % (B * T * ddp_world_size) == 0     # "make sure total_batch_size is divisible by B * T * ddp_world_size"
+assert total_batch_size % (B * T * ddp_world_size) == 0, "make sure total_batch_size is divisible by B * T * ddp_world_size"
 grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
 if master_process:
     print(f"total desired batch size: {total_batch_size}")
@@ -344,6 +344,9 @@ if use_compile:
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
+# model
+raw_model = model.module if ddp else model # always contains the "raw" unwrapped model
+
 max_lr = 6e-4
 min_lr = max_lr * 0.1
 warmup_steps = 10
@@ -361,9 +364,9 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff starts at 1 and goes to 0
     return min_lr + coeff * (max_lr - min_lr)
 
-# optimize params
+# optimize
 # optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)      # uses buffers (first and second moment)
-optimizer = model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device_type=device)
+optimizer = raw_model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device_type=device)
 
 for step in range(max_steps):
     t0 = time.time()
@@ -373,7 +376,8 @@ for step in range(max_steps):
     for micro_step in range(grad_accum_steps):
         x, y = train_loader.next_batch()
         x, y = x.to(device), y.to(device)
-
+        if ddp:
+            model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1)     # only sync loss.backward across all GPUs after gradient accumulation is complete
         with torch.autocast(device_type=device, dtype=torch.bfloat16):      # use 16 bit float only for foward pass and loss calculation
             logits, loss = model(x, y)
 
@@ -383,11 +387,7 @@ for step in range(max_steps):
         # instead of a SUM we want MEAN. Scale the loss here so it comes out right
         loss = loss/grad_accum_steps
         loss_accum += loss.detach()
-
-        if ddp:
-            model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1)     # only sync loss.backward across all GPUs after gradient accumulation is complete
         loss.backward()     # accumulate gradients
-
     if ddp:
         dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)       # avg out total accumulated loss across GPUs and sync to all ranks 
 
@@ -400,13 +400,16 @@ for step in range(max_steps):
 
     optimizer.step()    # update params
 
-    torch.cuda.synchronize()
+    if device_type == "cuda":
+        torch.cuda.synchronize() # wait for the GPU to finish work
+
     t1 = time.time()
-    dt = (t1-t0)*1000   # time diff in ms
-    tokensps = (train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size)/dt
+    dt = (t1-t0)   # time diff in seconds
+    tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
+    tokens_per_sec = tokens_processed / dt
 
     if master_process:
-        print(f"step {step} | loss: {loss_accum.item()} | dt: {dt:.2f}ms | lr: {lr:.2e} | norm: {norm:.4f} | token/sec: {tokensps}")
+        print(f"step {step:5d} | loss: {loss_accum.item():.6f} | lr {lr:.4e} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tok/sec: {tokens_per_sec:.2f}")
 
 if ddp:
     destroy_process_group()
