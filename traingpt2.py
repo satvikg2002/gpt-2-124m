@@ -428,6 +428,19 @@ for step in range(max_steps):
             with open(log_file, "a") as f:
                 f.write(f"step {step}  | val {val_loss_accum.item():.4f}")
 
+            if step > 0 and (step % 5000 == 0 or step == last_step):
+                # optionally write model checkpoints
+                checkpoint_path = os.path.join(log_dir, f"model_{step:05d}.pt")
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'config': raw_model.config,
+                    'step': step,
+                    'val_loss': val_loss_accum.item()
+                }
+                # you might also want to add optimizer.state_dict() and
+                # rng seeds etc., if you wanted to more exactly resume training
+                torch.save(checkpoint, checkpoint_path)
+
     # evaluate hellaswag every eval_iter steps
     # if (step % eval_iter == 0 or step == last_step) and (not use_compile):
     #     num_correct_norm = 0
