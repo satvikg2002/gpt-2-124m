@@ -426,7 +426,7 @@ for step in range(max_steps):
         if master_process:
             print(f"validation loss: {val_loss_accum.item():.4f}")
             with open(log_file, "a") as f:
-                f.write(f"step {step}  | val {val_loss_accum.item():.4f}")
+                f.write(f"step {step}  | val {val_loss_accum.item():.4f}\n")
 
             if step > 0 and (step % 5000 == 0 or step == last_step):
                 # optionally write model checkpoints
@@ -512,7 +512,7 @@ for step in range(max_steps):
 
             # write generated text to logs
             with open (log_file, "a") as f:
-                f.write(f"step {step} | rank {ddp_rank} | sample {i}: {decoded}")
+                f.write(f"step {step} | rank {ddp_rank} | sample {i}: {decoded}\n")
 
     # training loop
     model.train()        
@@ -557,7 +557,7 @@ for step in range(max_steps):
     if master_process:
         print(f"step {step:5d} | loss: {loss_accum.item():.6f} | lr {lr:.4e} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tok/sec: {tokens_per_sec:.2f}")
         with open(log_file, "a") as f:
-            f.write(f"step {step:5d} | loss: {loss_accum.item():.6f}")
+            f.write(f"step {step:5d} | loss: {loss_accum.item():.6f}\n")
 
 if ddp:
     destroy_process_group()
