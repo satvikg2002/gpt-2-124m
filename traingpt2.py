@@ -510,6 +510,10 @@ for step in range(max_steps):
             decoded = enc.decode(tokens)
             print(f"rank {ddp_rank} sample {i}: {decoded}")
 
+            # write generated text to logs
+            with open (log_file, "a") as f:
+                f.write(f"step {step} | rank {ddp_rank} | sample {i}: {decoded}")
+
     # training loop
     model.train()        
     optimizer.zero_grad()
