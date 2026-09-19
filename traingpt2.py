@@ -408,7 +408,7 @@ for step in range(max_steps):
     last_step = max_steps - 1
 
     # evaluate val loss every eval_iter steps
-    if step % eval_iter == 0 or last_step:
+    if step % eval_iter == 0 or step == last_step:
         model.eval()
         val_loader.reset()
         with torch.no_grad():
@@ -429,37 +429,37 @@ for step in range(max_steps):
                 f.write(f"step {step}  | val {val_loss_accum.item():.4f}")
 
     # evaluate hellaswag every eval_iter steps
-    if (step % eval_iter == 0 or step == last_step) and (not use_compile):
-        num_correct_norm = 0
-        num_total = 0
-        for i, example in enumerate(iterate_examples("val")):
-            # only process examples where i % ddp_world_size == ddp_rank
-            if i % ddp_world_size != ddp_rank:
-                continue
-            # render the example into tokens and labels
-            _, tokens, mask, label = render_example(example)
-            tokens = tokens.to(device)
-            mask = mask.to(device)
-            # get the logits
-            with torch.no_grad():
-                with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    logits, loss = model(tokens)
-                pred_norm = get_most_likely_row(tokens, mask, logits)
-            num_total += 1
-            num_correct_norm += int(pred_norm == label)
-        # reduce the stats across all processes
-        if ddp:
-            num_total = torch.tensor(num_total, dtype=torch.long, device=device)
-            num_correct_norm = torch.tensor(num_correct_norm, dtype=torch.long, device=device)
-            dist.all_reduce(num_total, op=dist.ReduceOp.SUM)
-            dist.all_reduce(num_correct_norm, op=dist.ReduceOp.SUM)
-            num_total = num_total.item()
-            num_correct_norm = num_correct_norm.item()
-        acc_norm = num_correct_norm / num_total
-        if master_process:
-            print(f"HellaSwag accuracy: {num_correct_norm}/{num_total}={acc_norm:.4f}")
-            with open(log_file, "a") as f:
-                f.write(f"{step} hella {acc_norm:.4f}\n")
+    # if (step % eval_iter == 0 or step == last_step) and (not use_compile):
+    #     num_correct_norm = 0
+    #     num_total = 0
+    #     for i, example in enumerate(iterate_examples("val")):
+    #         # only process examples where i % ddp_world_size == ddp_rank
+    #         if i % ddp_world_size != ddp_rank:
+    #             continue
+    #         # render the example into tokens and labels
+    #         _, tokens, mask, label = render_example(example)
+    #         tokens = tokens.to(device)
+    #         mask = mask.to(device)
+    #         # get the logits
+    #         with torch.no_grad():
+    #             with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
+    #                 logits, loss = model(tokens)
+    #             pred_norm = get_most_likely_row(tokens, mask, logits)
+    #         num_total += 1
+    #         num_correct_norm += int(pred_norm == label)
+    #     # reduce the stats across all processes
+    #     if ddp:
+    #         num_total = torch.tensor(num_total, dtype=torch.long, device=device)
+    #         num_correct_norm = torch.tensor(num_correct_norm, dtype=torch.long, device=device)
+    #         dist.all_reduce(num_total, op=dist.ReduceOp.SUM)
+    #         dist.all_reduce(num_correct_norm, op=dist.ReduceOp.SUM)
+    #         num_total = num_total.item()
+    #         num_correct_norm = num_correct_norm.item()
+    #     acc_norm = num_correct_norm / num_total
+    #     if master_process:
+    #         print(f"HellaSwag accuracy: {num_correct_norm}/{num_total}={acc_norm:.4f}")
+    #         with open(log_file, "a") as f:
+    #             f.write(f"{step} hella {acc_norm:.4f}\n")
 
     # once in a while generate from the model (except step 0, which is noise)
     if ((step > 0 and step % eval_iter == 0) or step == last_step) and (not use_compile):
